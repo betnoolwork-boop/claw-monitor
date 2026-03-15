@@ -1,20 +1,19 @@
-// Claw Monitor — Mobile-First Frontend v2
+// Claw Monitor v3 — Redesigned
 const API = '';
 let refreshTimer = null;
 let currentPage = 'overview';
 
 // ─── INIT ───────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  if (getCookie('llm_deck_session')) { hideLogin(); showPage('overview'); }
+  if (getCookie('clawmonitor_dashboard_session')) { hideLogin(); showPage('overview'); }
   setupLogin(); setupNav(); setupActions(); setupChat();
+  setupSearch();
   startAutoRefresh();
+  startStatusBar();
   
-  // Pause polling when tab is hidden (saves CPU)
   document.addEventListener('visibilitychange', () => {
     logsPaused = document.hidden;
-    if(!document.hidden && currentPage === 'logs') {
-      loadLogContent(currentLog, true);
-    }
+    if(!document.hidden && currentPage === 'logs') loadLogContent(currentLog, true);
   });
 });
 
@@ -48,21 +47,143 @@ function showPage(page) {
   currentPage = page;
   document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === `page-${page}`));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.page === page));
-  document.querySelectorAll('.desktop-nav a').forEach(n => n.classList.toggle('active', n.dataset.page === page));
+  document.querySelectorAll('.sidebar a').forEach(n => n.classList.toggle('active', n.dataset.page === page));
   const loaders = {overview:loadOverview, agents:loadAgents, llm:loadLLM, incidents:loadIncidents, growth:loadGrowth, system:loadSystem, topology:loadTopology, logs:loadLogs};
-  // cleanup
   if (page !== 'logs') { clearTimeout(logTimer); logTimer = null; lastLogLines = ''; }
-  
   loaders[page]?.();
 }
 
-// ─── SNAPSHOT (one call for overview) ───────────────────────
+// ─── SEARCH (Ctrl+K) ────────────────────────────────────────
+const SEARCH_ITEMS = [
+  { icon:'📊', label:'Обзор', page:'overview' },
+  { icon:'🤖', label:'Агенты', page:'agents' },
+  { icon:'💰', label:'LLM Usage', page:'llm' },
+  { icon:'🚨', label:'Инциденты', page:'incidents' },
+  { icon:'🌱', label:'Growth', page:'growth' },
+  { icon:'🔗', label:'Топология', page:'topology' },
+  { icon:'⚙️', label:'Система', page:'system' },
+  { icon:'💬', label:'Чат', page:'chat' },
+  { icon:'📋', label:'Логи', page:'logs' },
+];
+
+function setupSearch() {
+  const overlay = document.getElementById('searchOverlay');
+  const input = document.getElementById('searchInput');
+  const results = document.getElementById('searchResults');
+  
+  // Ctrl+K / Cmd+K
+  document.addEventListener('keydown', e => {
+    if((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); openSearch(); }
+    if(e.key === 'Escape') closeSearch();
+  });
+  overlay?.addEventListener('click', e => { if(e.target === overlay) closeSearch(); });
+  input?.addEventListener('input', () => renderSearch(input.value));
+  input?.addEventListener('keydown', e => {
+    const items = results?.querySelectorAll('.search-result');
+    const active = results?.querySelector('.search-result.active');
+    let idx = active ? Array.from(items).indexOf(active) : -1;
+    if(e.key === 'ArrowDown') { e.preventDefault(); idx = Math.min(idx+1, items.length-1); setActiveResult(items, idx); }
+    else if(e.key === 'ArrowUp') { e.preventDefault(); idx = Math.max(idx-1, 0); setActiveResult(items, idx); }
+    else if(e.key === 'Enter') { e.preventDefault(); active?.click(); }
+  });
+}
+
+function openSearch() {
+  const overlay = document.getElementById('searchOverlay');
+  const input = document.getElementById('searchInput');
+  overlay?.classList.add('open');
+  input.value = '';
+  input?.focus();
+  renderSearch('');
+}
+function closeSearch() { document.getElementById('searchOverlay')?.classList.remove('open'); }
+function setActiveResult(items, idx) { items.forEach((el,i) => el.classList.toggle('active', i===idx)); }
+
+function renderSearch(query) {
+  const results = document.getElementById('searchResults');
+  const q = query.toLowerCase().trim();
+  const filtered = q ? SEARCH_ITEMS.filter(i => i.label.toLowerCase().includes(q)) : SEARCH_ITEMS;
+  results.innerHTML = filtered.map(i => `
+    <div class="search-result" onclick="closeSearch();showPage('${i.page}')">
+      <span class="search-result-icon">${i.icon}</span>
+      <span>${i.label}</span>
+    </div>
+  `).join('') || '<div class="search-result" style="color:var(--text-muted)">Ничего не найдено</div>';
+  // Activate first
+  const first = results.querySelector('.search-result');
+  if(first) first.classList.add('active');
+}
+
+// ─── STATUS BAR ─────────────────────────────────────────────
+function startStatusBar() {
+  updateStatusBar();
+  setInterval(updateStatusBar, 10000); // every 10s
+}
+
+async function updateStatusBar() {
+  try {
+    const r = await fetch(`${API}/api/system/status`, {credentials:'include'});
+    if(!r.ok) return;
+    const d = await r.json();
+    
+    const cpu = d.loadavg1 ? parseFloat(d.loadavg1) : null;
+    const cpuCores = navigator.hardwareConcurrency || 4;
+    const cpuPct = cpu !== null ? Math.min(Math.round((cpu / cpuCores) * 100), 100) : null;
+    
+    // CPU
+    const cpuEl = document.getElementById('statusCpu');
+    if(cpuEl && cpuPct !== null) cpuEl.textContent = cpuPct + '%';
+    
+    // RAM
+    const ramEl = document.getElementById('statusRam');
+    if(ramEl && d.memory) {
+      const usedPct = d.memory.totalMb ? Math.round((d.memory.usedMb / d.memory.totalMb) * 100) : null;
+      ramEl.textContent = usedPct !== null ? usedPct + '%' : '—';
+    }
+    
+    // Disk
+    const diskEl = document.getElementById('statusDisk');
+    if(diskEl && d.disk && d.disk.totalGb) {
+      const usedPct = Math.round(((d.disk.totalGb - d.disk.freeGb) / d.disk.totalGb) * 100);
+      diskEl.textContent = usedPct + '%';
+    }
+    
+    // Uptime
+    const upEl = document.getElementById('statusUptime');
+    if(upEl && d.uptimeSeconds) {
+      const h = Math.floor(d.uptimeSeconds / 3600);
+      const m = Math.floor((d.uptimeSeconds % 3600) / 60);
+      upEl.textContent = h > 0 ? h + 'h ' + m + 'm' : m + 'm';
+    }
+    
+    // Sessions (from runtime summary if available)
+    const sessEl = document.getElementById('statusSessions');
+    if(sessEl) {
+      try {
+        const sr = await fetch(`${API}/api/details/snapshot`, {credentials:'include'});
+        if(sr.ok) {
+          const snap = await sr.json();
+          const total = snap.runtime?.summary?.total || 0;
+          sessEl.textContent = total;
+        }
+      } catch {}
+    }
+    
+    // Status dot color based on CPU
+    const dot = document.getElementById('statusDot');
+    if(dot && cpuPct !== null) {
+      dot.className = 'status-dot' + (cpuPct > 80 ? ' err' : cpuPct > 50 ? ' warn' : '');
+    }
+  } catch {}
+}
+
+// ─── SNAPSHOT ───────────────────────────────────────────────
 async function fetchSnapshot() {
   const r = await fetch(`${API}/api/details/snapshot`, {credentials:'include'});
   return r.ok ? await r.json() : null;
 }
 
-// ─── OVERVIEW ───────────────────────────────────────────────
+// ─── OVERVIEW (redesigned — large numbers, icons) ──────────
 async function loadOverview() {
   const cards = document.getElementById('overview-cards');
   const alerts = document.getElementById('overview-alerts');
@@ -84,34 +205,49 @@ async function loadOverview() {
     const totalCost = costs.reduce((a,s) => a + (s.estimatedCostUsd||0), 0);
     const totalTokens = (llm.tokensTotal||0);
 
-    // Store full data for modals
     window._overviewData = { runtimeAgents, registryAgents, costs, growthProposals, llm, sys, rt, reg, growth };
 
+    // New card design: icon + large number + compact meta
     cards.innerHTML = `
       <div class="card clickable" onclick="showOverviewDetail('sessions')">
-        <div class="label">Сессии</div>
+        <div class="icon-row">
+          <span class="card-icon">📡</span>
+          <span class="label">Сессии</span>
+        </div>
         <div class="value">${rt.total ?? '—'}</div>
-        <div class="meta">active: ${rt.active||0} · warm: ${rt.warm||0} · idle: ${rt.idle||0} · 👆 подробнее</div>
+        <div class="meta">🟢 ${rt.active||0} active · 🟡 ${rt.warm||0} warm · ⚪ ${rt.idle||0} idle</div>
       </div>
       <div class="card clickable" onclick="showOverviewDetail('agents')">
-        <div class="label">Агенты</div>
+        <div class="icon-row">
+          <span class="card-icon">🤖</span>
+          <span class="label">Агенты</span>
+        </div>
         <div class="value">${reg.canonicalCore ?? registryAgents.length}</div>
-        <div class="meta">в реестре · 👆 подробнее</div>
+        <div class="meta">в реестре</div>
       </div>
       <div class="card clickable ${totalCost > 2 ? 'danger' : ''}" onclick="showOverviewDetail('llm')">
-        <div class="label">LLM расход</div>
-        <div class="value">$${(totalCost || 0).toFixed(2)}</div>
-        <div class="meta">${fmtTokens(totalTokens)} токенов · ${llm.providerCount||0} провайдеров · 👆</div>
+        <div class="icon-row">
+          <span class="card-icon">💰</span>
+          <span class="label">LLM расход</span>
+        </div>
+        <div class="value ${totalCost > 2 ? 'red' : 'green'}">$${(totalCost || 0).toFixed(2)}</div>
+        <div class="meta">${fmtTokens(totalTokens)} токенов · ${llm.providerCount||0} провайдеров</div>
       </div>
       <div class="card clickable" onclick="showOverviewDetail('disk')">
-        <div class="label">Диск</div>
-        <div class="value">${sys.disk?.freeGb ?? '—'} GB</div>
-        <div class="meta">свободно из ${sys.disk?.totalGb || '?'} GB · 👆</div>
+        <div class="icon-row">
+          <span class="card-icon">💾</span>
+          <span class="label">Диск</span>
+        </div>
+        <div class="value cyan">${sys.disk?.freeGb ?? '—'}</div>
+        <div class="meta">свободно GB из ${sys.disk?.totalGb || '?'} GB</div>
       </div>
       <div class="card full clickable ${growth.openProposals > 0 ? 'highlight' : ''}" onclick="showOverviewDetail('growth')">
-        <div class="label">🌱 Growth</div>
-        <div class="value">${growth.openProposals ?? 0} предложений</div>
-        <div class="meta">${growth.bestNextMove?.title || 'Нет предложений'} · 👆 подробнее</div>
+        <div class="icon-row">
+          <span class="card-icon">🌱</span>
+          <span class="label">Growth</span>
+        </div>
+        <div class="value purple">${growth.openProposals ?? 0}</div>
+        <div class="meta">${growth.bestNextMove?.title || 'Нет предложений'}</div>
       </div>
     `;
 
@@ -119,17 +255,17 @@ async function loadOverview() {
     alerts.innerHTML = al.length ? al.slice(0,6).map((a,i) => `
       <div class="item level-${a.level} clickable" onclick='showOverviewDetail("alert", ${JSON.stringify(a).replace(/'/g,"&#39;")})'>
         <div class="item-title">${esc(a.title)}</div>
-        <div class="item-sub">${esc(a.message||'')} · 👆</div>
+        <div class="item-sub">${esc(a.message||'')}</div>
       </div>
-    `).join('') : '<div class="empty-state"><div class="emoji">✅</div>Всё спокойно</div>';
+    `).join('') : '<div class="empty-state"><span class="emoji">✅</span>Всё спокойно</div>';
 
     updateRefreshTime();
   } catch(e) {
-    cards.innerHTML = `<div class="empty-state"><div class="emoji">⚠️</div>Ошибка загрузки</div>`;
+    cards.innerHTML = `<div class="empty-state"><span class="emoji">⚠️</span>Ошибка загрузки</div>`;
   }
 }
 
-// ─── AGENTS ─────────────────────────────────────────────────
+// ─── AGENTS (tier-colored borders) ─────────────────────────
 async function loadAgents() {
   const grid = document.getElementById('agents-grid');
   if(!grid) return;
@@ -142,38 +278,17 @@ async function loadAgents() {
     const agents = regR.ok ? await regR.json() : [];
     const snap = snapR.ok ? await snapR.json() : {};
     const runtimeAgents = snap.runtime?.agents || [];
-    const snapAgents = snap.registry?.agents || [];
     const runtimeMap = {};
     runtimeAgents.forEach(a => { runtimeMap[a.id] = a; });
-    
-    // Build lookup for registry agent data with links
-    const regData = {};
-    snapAgents.forEach(a => { regData[a.id] = a; });
     
     if(!agents.length) { grid.innerHTML = '<div class="empty-state">Нет агентов</div>'; return; }
     
     const stateIcons = {active:'🟢', warm:'🟡', idle:'⚪', unknown:'❓'};
-    const stateLabels = {active:'✅ Работает', warm:'🟡 Недавно', idle:'⏸ Простой', unknown:'❌ Не выполнял'};
+    const stateLabels = {active:'✅ Работает', warm:'🟡 Недавно', idle:'⏸ Простой', unknown:'❓ Нет сигнала'};
     const stateColors = {active:'var(--green)', warm:'var(--orange)', idle:'var(--text-dim)', unknown:'var(--red)'};
     
-    // Build tree: get links from registry
-    const reg = snap.registry || {};
-    const links = reg.topology?.links || [];
-    
-    // Find children for each node
-    const childrenMap = {};
-    links.forEach(l => {
-      const from = l.from || l.source;
-      const to = l.to || l.target;
-      if(!childrenMap[from]) childrenMap[from] = [];
-      childrenMap[from].push(to);
-    });
-    
-    // Also build from tiers: orchestrator -> specialists, specialists -> backends
-    const orchestrator = agents.find(a => a.tier === 'orchestrator');
-    const specialists = agents.filter(a => a.tier === 'specialists');
-    const backends = agents.filter(a => a.tier === 'execution_backends');
-    const experimental = agents.filter(a => a.tier === 'experimental');
+    // Tier colors for borders (CSS handles via data-tier)
+    const tierLabels = {orchestrator:'🎯 Оркестратор', specialists:'🧠 Специалист', execution_backends:'⚡ Backend', experimental:'🧪 Experimental', default:''};
     
     const renderNode = (a, level) => {
       const rt = runtimeMap[a.id] || {};
@@ -186,22 +301,22 @@ async function loadAgents() {
         : '';
       const msg = rt.latestMessage ? esc(rt.latestMessage.slice(0,80)) : '—';
       const name = esc(a.name||a.id);
+      const tier = a.tier || 'default';
       
-      // Determine status label
       let statusLabel = stateLabels[state] || stateLabels.unknown;
       if(state === 'active' && msg && msg !== '—') statusLabel = '✅ ' + msg;
       else if(state === 'warm') statusLabel = '🟡 ' + (msg !== '—' ? msg : ago);
       else if(state === 'idle') statusLabel = '⏸ Простой ' + ago;
       
       return `<div class="tree-node level-${level}">
-        <div class="tree-node-card" onclick="showAgentDetail('${esc(a.id)}')" style="border-left: 3px solid ${stateColors[state]||'var(--border)'}">
+        <div class="tree-node-card" data-tier="${tier}" onclick="showAgentDetail('${esc(a.id)}')">
           <div class="tree-node-header">
             <span class="tree-node-icon">${stateIcons[state]||'❓'}</span>
             <span class="tree-node-name">${name}</span>
-            <span class="tree-node-tier">${esc(a.tier==='specialists'?'спец':a.tier==='execution_backends'?'бэк':a.tier==='orchestrator'?'орк':a.tier||'')}</span>
+            <span class="tree-node-tier">${esc(tierLabels[tier]?.split(' ').pop()||tier)}</span>
           </div>
           <div class="tree-node-status">${statusLabel}</div>
-          ${a.status && a.status !== 'canonical' ? `<div class="tree-node-badge"><span class="badge ${statusBadge(a.status)}" style="font-size:10px">${esc(a.status)}</span></div>` : ''}
+          ${a.status && a.status !== 'canonical' ? `<div style="margin-top:4px"><span class="badge ${statusBadge(a.status)}" style="font-size:10px">${esc(a.status)}</span></div>` : ''}
         </div>
         <div class="tree-children" id="children-${a.id}"></div>
       </div>`;
@@ -209,32 +324,25 @@ async function loadAgents() {
     
     let html = '<div class="agents-tree">';
     
-    // Orchestrator at top
+    const orchestrator = agents.find(a => a.tier === 'orchestrator');
+    const specialists = agents.filter(a => a.tier === 'specialists');
+    const backends = agents.filter(a => a.tier === 'execution_backends');
+    const experimental = agents.filter(a => a.tier === 'experimental');
+    
     if(orchestrator) {
       html += renderNode(orchestrator, 0);
-      
-      // Draw connection line
       html += '<div class="tree-branch-line"></div>';
-      
-      // Specialists
       html += '<div class="tree-level">';
-      specialists.forEach(s => {
-        html += renderNode(s, 1);
-      });
+      specialists.forEach(s => { html += renderNode(s, 1); });
       html += '</div>';
-      
-      // Backends
       html += '<div class="tree-branch-line"></div>';
       html += '<div class="tree-level">';
-      backends.forEach(b => {
-        html += renderNode(b, 2);
-      });
+      backends.forEach(b => { html += renderNode(b, 2); });
       html += '</div>';
     }
     
     html += '</div>';
     
-    // Experimental / Inactive collapsed section
     if(experimental.length) {
       html += `<div class="agents-collapsed">
         <div class="collapsed-header" onclick="document.getElementById('collapsed-list').classList.toggle('show')">
@@ -263,8 +371,8 @@ async function showAgentDetail(id) {
     const d = r.ok ? await r.json() : {};
     openModal(`
       <h3 style="margin-bottom:12px">${esc(d.agent?.name||id)}</h3>
-      <div class="card full" style="margin-bottom:10px"><div class="label">Status</div><div class="value">${esc(d.agent?.status||'—')}</div></div>
-      <div class="card full" style="margin-bottom:10px"><div class="label">Runtime</div><div class="value">${esc(d.agent?.runtimeState||'—')}</div></div>
+      <div class="card full" style="margin-bottom:10px"><div class="label">Status</div><div class="value" style="font-size:20px">${esc(d.agent?.status||'—')}</div></div>
+      <div class="card full" style="margin-bottom:10px"><div class="label">Runtime</div><div class="value" style="font-size:20px">${esc(d.agent?.runtimeState||'—')}</div></div>
       ${d.relatedTasks?.length ? `<div class="section-label">Задачи</div><div class="list">${d.relatedTasks.map(t=>`<div class="item"><div class="item-title" style="font-size:14px">${esc(t.title||t.id)}</div><div class="item-sub">${esc(t.status||'')}</div></div>`).join('')}</div>` : ''}
     `);
   } catch {}
@@ -288,8 +396,8 @@ async function loadLLM() {
     const sess = sessR.ok ? await sessR.json() : {items:[]};
 
     sumEl.innerHTML = `<div class="cards">
-      <div class="card"><div class="label">Сессий</div><div class="value">${sum.sessionsTracked||0}</div><div class="meta">свежих: ${sum.freshSessions||0}</div></div>
-      <div class="card"><div class="label">Токены</div><div class="value">${fmtTokens(sum.tokensTotal||0)}</div><div class="meta">${sum.providerCount||0} провайдеров · ${sum.modelCount||0} моделей</div></div>
+      <div class="card"><div class="icon-row"><span class="card-icon">📊</span><span class="label">Сессий</span></div><div class="value">${sum.sessionsTracked||0}</div><div class="meta">свежих: ${sum.freshSessions||0}</div></div>
+      <div class="card"><div class="icon-row"><span class="card-icon">🔢</span><span class="label">Токены</span></div><div class="value cyan">${fmtTokens(sum.tokensTotal||0)}</div><div class="meta">${sum.providerCount||0} провайдеров · ${sum.modelCount||0} моделей</div></div>
     </div>`;
 
     provEl.innerHTML = (prov.items||[]).map(p => `
@@ -331,9 +439,9 @@ async function loadIncidents() {
     const warn = events.filter(e=>e.level==='warning').length;
 
     sumEl.innerHTML = `<div class="cards">
-      <div class="card ${crit?'danger':''}"><div class="label">Critical</div><div class="value">${crit}</div></div>
-      <div class="card ${warn?'highlight':''}"><div class="label">Warning</div><div class="value">${warn}</div></div>
-      <div class="card"><div class="label">Всего</div><div class="value">${events.length}</div></div>
+      <div class="card ${crit?'danger':''}"><div class="icon-row"><span class="card-icon">🔴</span><span class="label">Critical</span></div><div class="value red">${crit}</div></div>
+      <div class="card ${warn?'highlight':''}"><div class="icon-row"><span class="card-icon">🟡</span><span class="label">Warning</span></div><div class="value orange">${warn}</div></div>
+      <div class="card"><div class="icon-row"><span class="card-icon">📋</span><span class="label">Всего</span></div><div class="value">${events.length}</div></div>
     </div>`;
 
     listEl.innerHTML = events.slice(0,20).map(e => `
@@ -341,7 +449,7 @@ async function loadIncidents() {
         <div class="item-title">${esc(e.kind||e.title||'Incident')}</div>
         <div class="item-sub">${esc(e.provider||e.source||'')} · ${timeAgo(e.ts||e.timestamp)}</div>
       </div>
-    `).join('') || '<div class="empty-state"><div class="emoji">✅</div>Инцидентов нет</div>';
+    `).join('') || '<div class="empty-state"><span class="emoji">✅</span>Инцидентов нет</div>';
   } catch { sumEl.innerHTML = '<div class="empty-state">Ошибка</div>'; }
 }
 
@@ -374,10 +482,10 @@ async function loadGrowth() {
     const prop = propR.ok ? await propR.json() : [];
 
     sumEl.innerHTML = `<div class="cards">
-      <div class="card ${sum.openProposals>0?'highlight':''}"><div class="label">Открыто</div><div class="value">${sum.openProposals||0}</div></div>
-      <div class="card"><div class="label">Реализовано</div><div class="value">${sum.implemented||0}</div></div>
+      <div class="card ${sum.openProposals>0?'highlight':''}"><div class="icon-row"><span class="card-icon">📬</span><span class="label">Открыто</span></div><div class="value purple">${sum.openProposals||0}</div></div>
+      <div class="card"><div class="icon-row"><span class="card-icon">✅</span><span class="label">Реализовано</span></div><div class="value green">${sum.implemented||0}</div></div>
     </div>
-    ${sum.bestNextMove ? `<div class="card full highlight" style="margin-top:10px"><div class="label">🎯 Следующий шаг</div><div class="value" style="font-size:17px">${esc(sum.bestNextMove.title)}</div><div class="meta">${esc(sum.bestNextMove.type||'')} · ${esc(sum.bestNextMove.complexity||'')}</div></div>` : ''}`;
+    ${sum.bestNextMove ? `<div class="card full highlight" style="margin-top:10px"><div class="icon-row"><span class="card-icon">🎯</span><span class="label">Следующий шаг</span></div><div class="value" style="font-size:17px">${esc(sum.bestNextMove.title)}</div><div class="meta">${esc(sum.bestNextMove.type||'')} · ${esc(sum.bestNextMove.complexity||'')}</div></div>` : ''}`;
 
     const items = Array.isArray(prop) ? prop : (prop.items||[]);
     listEl.innerHTML = items.slice(0,15).map(p => `
@@ -400,13 +508,12 @@ async function loadSystem() {
     const d = r.ok ? await r.json() : {};
     el.innerHTML = `
       <div class="cards">
-        <div class="card"><div class="label">Статус</div><div class="value" style="font-size:16px">${d.status === 'ok' ? '✅ OK' : '⚠️ ' + esc(d.status)}</div></div>
-        <div class="card"><div class="label">Load</div><div class="value">${esc(d.loadavg1||'—')}</div></div>
-        <div class="card"><div class="label">Disk</div><div class="value">${d.disk?.freeGb||'?'} GB</div><div class="meta">из ${d.disk?.totalGb||'?'} GB</div></div>
-        <div class="card"><div class="label">Python</div><div class="value" style="font-size:14px">${esc(d.python||'—')}</div></div>
+        <div class="card"><div class="icon-row"><span class="card-icon">${d.status === 'ok' ? '✅' : '⚠️'}</span><span class="label">Статус</span></div><div class="value" style="font-size:20px">${d.status === 'ok' ? 'OK' : esc(d.status)}</div></div>
+        <div class="card"><div class="icon-row"><span class="card-icon">📈</span><span class="label">Load</span></div><div class="value">${esc(d.loadavg1||'—')}</div></div>
+        <div class="card"><div class="icon-row"><span class="card-icon">💾</span><span class="label">Disk</span></div><div class="value cyan">${d.disk?.freeGb||'?'} GB</div><div class="meta">из ${d.disk?.totalGb||'?'} GB</div></div>
+        <div class="card"><div class="icon-row"><span class="card-icon">🐍</span><span class="label">Python</span></div><div class="value" style="font-size:16px">${esc(d.python||'—')}</div></div>
       </div>
     `;
-    // tasks queue
     const tr = await fetch(`${API}/api/tasks/queue`, {credentials:'include'});
     const tasks = tr.ok ? await tr.json() : {items:[]};
     const items = tasks.items || [];
@@ -505,15 +612,8 @@ function closeModal() { document.getElementById('modal-overlay')?.classList.remo
 
 // ─── AUTO-REFRESH ───────────────────────────────────────────
 function startAutoRefresh() {
-  const toggle = document.getElementById('auto-refresh-toggle');
   const btn = document.getElementById('refresh-btn');
   btn?.addEventListener('click', () => showPage(currentPage));
-  toggle?.addEventListener('change', () => {
-    if(toggle.checked) refreshTimer = setInterval(() => showPage(currentPage), 30000);
-    else { clearInterval(refreshTimer); refreshTimer = null; }
-  });
-  // Start auto-refresh OFF by default (user can enable manually)
-  if(toggle?.checked) refreshTimer = setInterval(() => showPage(currentPage), 30000);
 }
 
 // ─── UTILS ──────────────────────────────────────────────────
@@ -527,7 +627,18 @@ function timeAgo(ts) {
   if(diff<86400000) return Math.floor(diff/3600000)+'ч назад';
   return Math.floor(diff/86400000)+'д назад';
 }
-// ─── OVERVIEW DETAIL ─────────────────────────────────────────
+function statusBadge(s) {
+  if(!s) return 'dim';
+  if(['canonical','active'].includes(s)) return 'ok';
+  if(['draft','experimental','transitional'].includes(s)) return 'warn';
+  return 'err';
+}
+function updateRefreshTime() {
+  const el = document.getElementById('refresh-time');
+  if(el) el.textContent = new Date().toLocaleTimeString('ru-RU');
+}
+
+// ─── OVERVIEW DETAIL ────────────────────────────────────────
 function showOverviewDetail(type, data) {
   const d = window._overviewData || {};
   let html = '';
@@ -540,7 +651,6 @@ function showOverviewDetail(type, data) {
     const unknown = agents.filter(a => a.runtimeState === 'unknown');
     
     const renderAgentRow = (a) => {
-      const stateColors = {active:'ok', warm:'warn', idle:'dim', unknown:'err'};
       const stateLabels = {active:'🟢 Активен', warm:'🟡 Недавно', idle:'⚪ Простой', unknown:'❓ Нет сигнала'};
       const ago = a.lastSeenSecondsAgo != null ? (a.lastSeenSecondsAgo < 60 ? 'сейчас' : a.lastSeenSecondsAgo < 3600 ? Math.floor(a.lastSeenSecondsAgo/60)+'м назад' : Math.floor(a.lastSeenSecondsAgo/3600)+'ч назад') : '—';
       return `<div class="item">
@@ -551,35 +661,25 @@ function showOverviewDetail(type, data) {
     
     html = `<h3>Сессии и агенты</h3>
       <div class="cards" style="margin:12px 0">
-        <div class="card"><div class="label">Active</div><div class="value">${active.length}</div></div>
-        <div class="card"><div class="label">Warm</div><div class="value">${warm.length}</div></div>
+        <div class="card"><div class="label">Active</div><div class="value green">${active.length}</div></div>
+        <div class="card"><div class="label">Warm</div><div class="value orange">${warm.length}</div></div>
         <div class="card"><div class="label">Idle</div><div class="value">${idle.length}</div></div>
-        <div class="card"><div class="label">Unknown</div><div class="value">${unknown.length}</div></div>
+        <div class="card"><div class="label">Unknown</div><div class="value red">${unknown.length}</div></div>
       </div>`;
-    
-    if(active.length) {
-      html += `<div class="section-label">🟢 Активные (${active.length})</div><div class="list">${active.map(renderAgentRow).join('')}</div>`;
-    }
-    if(warm.length) {
-      html += `<div class="section-label" style="margin-top:12px">🟡 Недавно активные (${warm.length})</div><div class="list">${warm.map(renderAgentRow).join('')}</div>`;
-    }
-    if(idle.length) {
-      html += `<div class="section-label" style="margin-top:12px">⚪ В простое (${idle.length})</div><div class="list">${idle.map(renderAgentRow).join('')}</div>`;
-    }
-    if(unknown.length) {
-      html += `<div class="section-label" style="margin-top:12px">❓ Нет сигнала (${unknown.length})</div><div class="list">${unknown.map(renderAgentRow).join('')}</div>`;
-    }
+    if(active.length) html += `<div class="section-label">🟢 Активные (${active.length})</div><div class="list">${active.map(renderAgentRow).join('')}</div>`;
+    if(warm.length) html += `<div class="section-label" style="margin-top:12px">🟡 Недавно активные</div><div class="list">${warm.map(renderAgentRow).join('')}</div>`;
+    if(idle.length) html += `<div class="section-label" style="margin-top:12px">⚪ В простое</div><div class="list">${idle.map(renderAgentRow).join('')}</div>`;
+    if(unknown.length) html += `<div class="section-label" style="margin-top:12px">❓ Нет сигнала</div><div class="list">${unknown.map(renderAgentRow).join('')}</div>`;
     
   } else if(type === 'agents') {
     const agents = d.registryAgents || [];
     const c = d.reg?.counts || {};
-    
     html = `<h3>Реестр агентов</h3>
       <div class="cards" style="margin:12px 0">
-        <div class="card"><div class="label">Orchestrator</div><div class="value">${c.orchestrator||0}</div></div>
-        <div class="card"><div class="label">Specialists</div><div class="value">${c.specialists||0}</div></div>
-        <div class="card"><div class="label">Backend</div><div class="value">${c.executionBackends||0}</div></div>
-        <div class="card"><div class="label">Experimental</div><div class="value">${c.experimental||0}</div></div>
+        <div class="card"><div class="label">Orchestrator</div><div class="value orange">${c.orchestrator||0}</div></div>
+        <div class="card"><div class="label">Specialists</div><div class="value green">${c.specialists||0}</div></div>
+        <div class="card"><div class="label">Backend</div><div class="value cyan">${c.executionBackends||0}</div></div>
+        <div class="card"><div class="label">Experimental</div><div class="value purple">${c.experimental||0}</div></div>
       </div>
       <div class="section-label">Все агенты</div>
       <div class="list">${agents.map(a => `
@@ -592,15 +692,13 @@ function showOverviewDetail(type, data) {
   } else if(type === 'llm') {
     const costs = d.costs || [];
     const llm = d.llm || {};
-    
     html = `<h3>LLM расход (подробно)</h3>
       <div class="cards" style="margin:12px 0">
-        <div class="card"><div class="label">Токенов</div><div class="value">${fmtTokens(llm.tokensTotal||0)}</div></div>
+        <div class="card"><div class="label">Токенов</div><div class="value cyan">${fmtTokens(llm.tokensTotal||0)}</div></div>
         <div class="card"><div class="label">Провайдеров</div><div class="value">${llm.providerCount||0}</div></div>
         <div class="card"><div class="label">Моделей</div><div class="value">${llm.modelCount||0}</div></div>
-        <div class="card"><div class="label">Свежих сессий</div><div class="value">${llm.freshSessions||0}</div></div>
+        <div class="card"><div class="label">Свежих сессий</div><div class="value green">${llm.freshSessions||0}</div></div>
       </div>`;
-    
     if(costs.length) {
       html += `<div class="section-label">🔥 Самые дорогие сессии</div>
         <div class="list">${costs.slice(0,10).map(s => `
@@ -622,83 +720,45 @@ function showOverviewDetail(type, data) {
     const total = (disk.totalGb||0).toFixed(1);
     const free = (disk.freeGb||0).toFixed(1);
     const pct = total > 0 ? Math.round((parseFloat(used)/parseFloat(total))*100) : 0;
-    
     html = `<h3>Диск</h3>
-      <div style="margin:16px 0">
-        <div style="background:var(--border);border-radius:99px;height:24px;overflow:hidden">
-          <div style="background:${pct>80?'var(--red)':pct>60?'var(--warn)':'var(--accent)'};width:${pct}%;height:100%;border-radius:99px;transition:width .3s"></div>
+      <div style="margin:16px 0;text-align:center">
+        <div style="font-size:48px;font-weight:800;color:${pct>80?'var(--red)':pct>60?'var(--orange)':'var(--cyan)'}">${pct}%</div>
+        <div style="background:var(--border);border-radius:99px;height:8px;margin:12px 0;overflow:hidden">
+          <div style="background:${pct>80?'var(--red)':pct>60?'var(--orange)':'var(--cyan)'};width:${pct}%;height:100%;border-radius:99px"></div>
         </div>
-        <div style="display:flex;justify-content:space-between;margin-top:8px">
-          <span class="meta">${free} GB свободно</span>
-          <span class="meta">${used} GB / ${total} GB</span>
-        </div>
-        <div style="text-align:center;margin-top:12px;font-size:36px;font-weight:700">${pct}%</div>
-      </div>
-      <div class="section-label">Детали</div>
-      <div class="list">
-        <div class="item"><div class="item-title">Использовано</div><div class="item-sub">${used} GB</div></div>
-        <div class="item"><div class="item-title">Свободно</div><div class="item-sub">${free} GB</div></div>
-        <div class="item"><div class="item-title">Всего</div><div class="item-sub">${total} GB</div></div>
+        <div class="meta">${free} GB свободно из ${total} GB</div>
       </div>`;
     
   } else if(type === 'growth') {
     const proposals = d.growthProposals || [];
     const openProposals = proposals.filter(p => p.status !== 'implemented');
     const implemented = proposals.filter(p => p.status === 'implemented');
-    
     html = `<h3>Growth — Предложения</h3>
       <div class="cards" style="margin:12px 0">
-        <div class="card highlight"><div class="label">Открыто</div><div class="value">${openProposals.length}</div></div>
-        <div class="card"><div class="label">Реализовано</div><div class="value">${implemented.length}</div></div>
-        <div class="card"><div class="label">Всего</div><div class="value">${proposals.length}</div></div>
+        <div class="card highlight"><div class="label">Открыто</div><div class="value purple">${openProposals.length}</div></div>
+        <div class="card"><div class="label">Реализовано</div><div class="value green">${implemented.length}</div></div>
       </div>`;
-    
     if(openProposals.length) {
-      html += `<div class="section-label">📋 Открытые предложения</div>
+      html += `<div class="section-label">📋 Открытые</div>
         <div class="list">${openProposals.map(p => `
-          <div class="item">
-            <div class="item-title">${esc(p.title)}</div>
-            <div class="item-sub">${esc(p.type||'')} · ${esc(p.complexity||'')} · ${esc(p.status)}</div>
-            ${p.description ? `<div class="meta" style="margin-top:4px">${esc(p.description.slice(0,150))}</div>` : ''}
-          </div>
-        `).join('')}</div>`;
-    }
-    if(implemented.length) {
-      html += `<div class="section-label" style="margin-top:12px">✅ Реализованные</div>
-        <div class="list">${implemented.map(p => `
-          <div class="item">
-            <div class="item-title">${esc(p.title)}</div>
-            <div class="item-sub">${esc(p.type||'')} · ${esc(p.complexity||'')}</div>
-          </div>
+          <div class="item"><div class="item-title">${esc(p.title)}</div><div class="item-sub">${esc(p.type||'')} · ${esc(p.complexity||'')}</div></div>
         `).join('')}</div>`;
     }
     
   } else if(type === 'alert') {
     html = `<h3>${esc(data.title)}</h3>
-      <div class="item level-${data.level}" style="margin:12px 0">
-        <div class="item-sub" style="font-size:14px">${esc(data.message)}</div>
-      </div>
+      <div class="item level-${data.level}" style="margin:12px 0"><div class="item-sub" style="font-size:14px">${esc(data.message)}</div></div>
       <p class="meta">Источник: ${esc(data.source||'unknown')}</p>
       ${data.remediation?.hints ? `<div class="section-label">Подсказки</div><ul style="padding-left:20px">${data.remediation.hints.map(h=>`<li style="margin-bottom:6px;font-size:14px">${esc(h)}</li>`).join('')}</ul>` : ''}
       ${data.remediation?.safeActions?.length ? `<div class="section-label">Безопасные действия</div><div style="display:flex;gap:8px;flex-wrap:wrap">${data.remediation.safeActions.map(a=>`<button onclick="runAction('${a.action}');closeModal();" style="font-size:12px;padding:6px 10px">${esc(a.label)}</button>`).join('')}</div>` : ''}`;
   }
   openModal(html);
 }
-function statusBadge(s) {
-  if(!s) return 'dim';
-  if(['canonical','active'].includes(s)) return 'ok';
-  if(['draft','experimental','transitional'].includes(s)) return 'warn';
-  return 'err';
-}
-function updateRefreshTime() {
-  const el = document.getElementById('refresh-time');
-  if(el) el.textContent = new Date().toLocaleTimeString('ru-RU');
-}
 
 // ─── LOGS ───────────────────────────────────────────────────
 let currentLog = 'gateway';
 let logTimer = null;
-let logsPaused = false; // pause logs when tab not visible
+let logsPaused = false;
 
 async function loadLogs() {
   document.querySelectorAll('.log-select-btn').forEach(btn => {
@@ -728,8 +788,6 @@ async function loadLogContent(source, reset) {
       el.scrollTop = el.scrollHeight;
     }
   } catch { el.textContent = 'Ошибка загрузки'; }
-  
-  // poll every 15s (paused when tab hidden)
   clearTimeout(logTimer);
   if(!logsPaused) logTimer = setTimeout(() => loadLogContent(currentLog, false), 15000);
 }

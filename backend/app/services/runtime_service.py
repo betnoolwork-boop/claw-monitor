@@ -12,7 +12,7 @@ _SESSIONS_CACHE: Dict[str, Any] = {
     'expiresAt': 0.0,
     'value': None,
 }
-_SESSION_TTL_SECONDS = 5.0
+_SESSION_TTL_SECONDS = 30.0
 
 
 def _run_sessions_list() -> Dict[str, Any]:

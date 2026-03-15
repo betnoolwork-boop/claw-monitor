@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-  <title>Claw Monitor Dashboard</title>
+  <title>Claw Monitor</title>
   <link rel="stylesheet" href="./styles.css"/>
 </head>
 <body>
@@ -13,8 +13,8 @@
 <!-- LOGIN -->
 <div id="loginOverlay">
   <div class="login-card">
-    <h2>Claw Monitor</h2>
-    <div class="sub">Центр управления</div>
+    <h2>🐾 Claw Monitor</h2>
+    <div class="sub">Центр управления OpenClaw</div>
     <div class="field">
       <label>Логин</label>
       <input id="loginUser" value="admin" autocomplete="username"/>
@@ -28,10 +28,19 @@
   </div>
 </div>
 
+<!-- SEARCH OVERLAY (Ctrl+K) -->
+<div class="search-overlay" id="searchOverlay">
+  <div class="search-box">
+    <input class="search-input" id="searchInput" placeholder="Поиск: страницы, агенты, команды..." autofocus/>
+    <div class="search-results" id="searchResults"></div>
+    <div class="search-hint">↑↓ навигация · Enter — открыть · Esc — закрыть</div>
+  </div>
+</div>
+
 <div class="app">
-  <!-- DESKTOP NAV -->
+  <!-- SIDEBAR (desktop) -->
   <aside class="sidebar">
-    <div class="brand">Claw Monitor Dashboard</div>
+    <div class="brand"><span class="brand-icon">🐾</span> Claw Monitor</div>
     <nav>
       <a href="#" data-page="overview" class="active">📊 Обзор</a>
       <a href="#" data-page="agents">🤖 Агенты</a>
@@ -118,7 +127,7 @@
           <span class="chat-hint" data-text="топология">топология</span>
         </div>
       </div>
-      <div style="margin-top:20px">
+      <div style="margin-top:16px">
         <div class="section-label">🔧 Действия</div>
         <div class="actions-grid">
           <button class="action-btn" data-action="refresh_runtime">🔄 Runtime</button>
@@ -128,26 +137,25 @@
           <button class="action-btn" data-action="dashboard_backend_restart">🔁 Restart backend</button>
           <button class="action-btn" data-action="dashboard_frontend_restart">🔁 Restart frontend</button>
         </div>
-        <div id="action-result" style="margin-top:14px;padding:12px;background:var(--bg);border-radius:12px;font-size:13px;color:var(--text-dim);">Здесь будут результаты</div>
+        <div id="action-result" style="margin-top:12px;padding:12px;background:var(--bg-subtle);border-radius:var(--radius);font-size:13px;color:var(--text-dim);">Здесь будут результаты</div>
       </div>
     </div>
 
     <!-- LOGS -->
     <div class="page" id="page-logs">
       <div class="page-title">📋 Логи</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
         <button class="log-select-btn active" data-log="gateway">Gateway</button>
         <button class="log-select-btn" data-log="gateway-errors">Gateway Errors</button>
         <button class="log-select-btn" data-log="backend">Backend</button>
         <button class="log-select-btn" data-log="backend-error">Backend Errors</button>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <span style="font-size:13px;color:var(--text-dim)">Источник: <strong id="logs-name" style="color:var(--accent)">gateway</strong></span>
+        <span style="font-size:12px;color:var(--text-dim)">Источник: <strong id="logs-name" style="color:var(--accent)">gateway</strong></span>
         <button id="logs-refresh">🔄 Обновить</button>
       </div>
       <pre id="logs-content"></pre>
     </div>
-
   </main>
 </div>
 
@@ -163,6 +171,35 @@
   <a class="nav-item" data-page="chat"><span class="nav-icon">💬</span>Чат</a>
   <a class="nav-item" data-page="logs"><span class="nav-icon">📋</span>Логи</a>
 </nav>
+
+<!-- STATUS BAR (bottom, always visible) -->
+<div class="status-bar" id="statusBar">
+  <div class="status-item">
+    <span class="status-dot" id="statusDot"></span>
+    <span class="status-label">CPU</span>
+    <span class="status-value" id="statusCpu">—</span>
+  </div>
+  <div class="sep"></div>
+  <div class="status-item">
+    <span class="status-label">RAM</span>
+    <span class="status-value" id="statusRam">—</span>
+  </div>
+  <div class="sep"></div>
+  <div class="status-item">
+    <span class="status-label">Disk</span>
+    <span class="status-value" id="statusDisk">—</span>
+  </div>
+  <div class="sep"></div>
+  <div class="status-item">
+    <span class="status-label">Uptime</span>
+    <span class="status-value" id="statusUptime">—</span>
+  </div>
+  <div class="sep"></div>
+  <div class="status-item">
+    <span class="status-label">Sessions</span>
+    <span class="status-value" id="statusSessions">—</span>
+  </div>
+</div>
 
 <script src="./app.js"></script>
 <script>

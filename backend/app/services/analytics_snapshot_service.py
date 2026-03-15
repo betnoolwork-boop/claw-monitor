@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Tuple
 from app.services.runtime_service import get_runtime_sessions
 
 
-SNAPSHOT_TTL_SECONDS = 5.0
+SNAPSHOT_TTL_SECONDS = 60.0
 
 _PROVIDER_COST_HINTS = {
     'openai-codex': 3.0,

@@ -17,6 +17,29 @@ def _read_loadavg() -> str:
         return 'n/a'
 
 
+def _read_meminfo() -> Dict[str, int]:
+    try:
+        info = {}
+        for line in Path('/proc/meminfo').read_text().splitlines():
+            parts = line.split()
+            if len(parts) >= 2:
+                key = parts[0].rstrip(':')
+                if key in ('MemTotal', 'MemAvailable'):
+                    info[key] = int(parts[1])  # kB
+        total_mb = info.get('MemTotal', 0) // 1024
+        avail_mb = info.get('MemAvailable', 0) // 1024
+        return {'totalMb': total_mb, 'usedMb': total_mb - avail_mb}
+    except Exception:
+        return {'totalMb': 0, 'usedMb': 0}
+
+
+def _read_uptime() -> int:
+    try:
+        return int(float(Path('/proc/uptime').read_text().split()[0]))
+    except Exception:
+        return 0
+
+
 def get_system_status() -> Dict[str, Any]:
     total, used, free = shutil.disk_usage('/')
     return {
@@ -28,6 +51,8 @@ def get_system_status() -> Dict[str, Any]:
             'usedGb': round(used / (1024**3), 2),
             'freeGb': round(free / (1024**3), 2),
         },
+        'memory': _read_meminfo(),
+        'uptimeSeconds': _read_uptime(),
         'python': subprocess.getoutput('python3 --version'),
     }
 
