@@ -1,0 +1,42 @@
+<svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0d0d0f"/>
+      <stop offset="100%" style="stop-color:#1a1a1f"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#6366f1"/>
+      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  
+  <!-- Paw icon -->
+  <text x="80" y="140" font-size="80">🐾</text>
+  
+  <!-- Title -->
+  <text x="180" y="130" fill="#e8e8ec" font-family="system-ui, -apple-system, sans-serif" font-size="56" font-weight="700">Claw Monitor</text>
+  <text x="180" y="175" fill="#8a8a96" font-family="system-ui, -apple-system, sans-serif" font-size="24">Панель управления OpenClaw</text>
+  
+  <!-- Metric cards -->
+  <rect x="80" y="220" width="250" height="120" rx="16" fill="#1a1a1f" stroke="#2a2a32"/>
+  <text x="100" y="260" fill="#8a8a96" font-family="system-ui" font-size="14">📊 Сессии</text>
+  <text x="100" y="310" fill="#6366f1" font-family="system-ui" font-size="42" font-weight="700">24</text>
+  
+  <rect x="350" y="220" width="250" height="120" rx="16" fill="#1a1a1f" stroke="#2a2a32"/>
+  <text x="370" y="260" fill="#8a8a96" font-family="system-ui" font-size="14">🤖 Агенты</text>
+  <text x="370" y="310" fill="#22c55e" font-family="system-ui" font-size="42" font-weight="700">11</text>
+  
+  <rect x="620" y="220" width="250" height="120" rx="16" fill="#1a1a1f" stroke="#2a2a32"/>
+  <text x="640" y="260" fill="#8a8a96" font-family="system-ui" font-size="14">💰 LLM</text>
+  <text x="640" y="310" fill="#f59e0b" font-family="system-ui" font-size="42" font-weight="700">$12.87</text>
+  
+  <rect x="890" y="220" width="250" height="120" rx="16" fill="#1a1a1f" stroke="#2a2a32"/>
+  <text x="910" y="260" fill="#8a8a96" font-family="system-ui" font-size="14">💾 Диск</text>
+  <text x="910" y="310" fill="#06b6d4" font-family="system-ui" font-size="42" font-weight="700">10.7 GB</text>
+  
+  <!-- Bottom bar -->
+  <rect x="0" y="550" width="1200" height="80" fill="#141418"/>
+  <text x="80" y="595" fill="#5a5a66" font-family="system-ui" font-size="16">FastAPI + Vanilla JS • HTTPS • Mobile-First • Open Source</text>
+  <text x="1050" y="595" fill="#6366f1" font-family="system-ui" font-size="16" font-weight="600">v2.0</text>
+</svg>

@@ -6,6 +6,14 @@
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <title>Claw Monitor</title>
+  <meta property="og:type" content="website"/>
+  <meta property="og:title" content="Claw Monitor — Панель управления OpenClaw"/>
+  <meta property="og:description" content="Мониторинг агентов, LLM usage, инциденты и системные метрики. FastAPI + Vanilla JS, open source."/>
+  <meta property="og:image" content="https://monitor.betnool.ru/og-card.png"/>
+  <meta property="og:image:width" content="1200"/>
+  <meta property="og:image:height" content="630"/>
+  <meta name="twitter:card" content="summary_large_image"/>
+  <meta name="telegram:card" content="summary_large_image"/>
   <link rel="stylesheet" href="./styles.css"/>
 </head>
 <body>
@@ -50,6 +58,7 @@
       <a href="#" data-page="topology">🔗 Топология</a>
       <a href="#" data-page="system">⚙️ Система</a>
       <a href="#" data-page="chat">💬 Чат</a>
+      <a href="#" data-page="claims">📋 Заявки</a>
       <a href="#" data-page="logs">📋 Логи</a>
     </nav>
   </aside>
@@ -141,6 +150,16 @@
       </div>
     </div>
 
+    <!-- CLAIMS -->
+    <div class="page" id="page-claims">
+      <div class="page-title">📋 Заявки <span class="badge-count" id="claims-count">0</span></div>
+      <div class="refresh-bar">Обновлено: <span class="time" id="claims-refresh-time">—</span></div>
+      <div class="section-label">Статистика</div>
+      <div id="claims-stats" class="cards"></div>
+      <div class="section-label">Все заявки</div>
+      <div id="claims-list" class="list"></div>
+    </div>
+
     <!-- LOGS -->
     <div class="page" id="page-logs">
       <div class="page-title">📋 Логи</div>
@@ -169,6 +188,7 @@
   <a class="nav-item" data-page="topology"><span class="nav-icon">🔗</span>Топология</a>
   <a class="nav-item" data-page="system"><span class="nav-icon">⚙️</span>Система</a>
   <a class="nav-item" data-page="chat"><span class="nav-icon">💬</span>Чат</a>
+  <a class="nav-item" data-page="claims"><span class="nav-icon">📋</span>Заявки</a>
   <a class="nav-item" data-page="logs"><span class="nav-icon">📋</span>Логи</a>
 </nav>
 

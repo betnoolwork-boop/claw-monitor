@@ -16,6 +16,8 @@ from app.routes.presets import router as presets_router
 from app.routes.registry import router as registry_router
 from app.routes.runtime import router as runtime_router
 from app.routes.system import router as system_router
+from app.routes.quota import router as quota_router
+from app.routes.claims import router as claims_router
 # tasks route not yet implemented
 # from app.routes.tasks import router as tasks_router
 from app.services.analytics_snapshot_service import prewarm_analytics_snapshot
@@ -51,6 +53,8 @@ app.include_router(llm_router)
 app.include_router(chat_router)
 app.include_router(presets_router)
 app.include_router(logs_router)
+app.include_router(quota_router)
+app.include_router(claims_router)
 
 
 @app.get('/health')

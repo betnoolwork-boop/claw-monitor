@@ -48,7 +48,7 @@ function showPage(page) {
   document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === `page-${page}`));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.page === page));
   document.querySelectorAll('.sidebar a').forEach(n => n.classList.toggle('active', n.dataset.page === page));
-  const loaders = {overview:loadOverview, agents:loadAgents, llm:loadLLM, incidents:loadIncidents, growth:loadGrowth, system:loadSystem, topology:loadTopology, logs:loadLogs};
+  const loaders = {overview:loadOverview, agents:loadAgents, llm:loadLLM, incidents:loadIncidents, growth:loadGrowth, system:loadSystem, topology:loadTopology, logs:loadLogs, claims:loadClaims};
   if (page !== 'logs') { clearTimeout(logTimer); logTimer = null; lastLogLines = ''; }
   loaders[page]?.();
 }
@@ -233,6 +233,14 @@ async function loadOverview() {
         <div class="value ${totalCost > 2 ? 'red' : 'green'}">$${(totalCost || 0).toFixed(2)}</div>
         <div class="meta">${fmtTokens(totalTokens)} токенов · ${llm.providerCount||0} провайдеров</div>
       </div>
+      <div class="card clickable" id="quota-card" onclick="showOverviewDetail('quota')">
+        <div class="icon-row">
+          <span class="card-icon">💳</span>
+          <span class="label">Квота OpenRouter</span>
+        </div>
+        <div class="value" id="quota-value">...</div>
+        <div class="meta" id="quota-meta">загрузка...</div>
+      </div>
       <div class="card clickable" onclick="showOverviewDetail('disk')">
         <div class="icon-row">
           <span class="card-icon">💾</span>
@@ -260,8 +268,58 @@ async function loadOverview() {
     `).join('') : '<div class="empty-state"><span class="emoji">✅</span>Всё спокойно</div>';
 
     updateRefreshTime();
+    updateQuotaCard();
   } catch(e) {
     cards.innerHTML = `<div class="empty-state"><span class="emoji">⚠️</span>Ошибка загрузки</div>`;
+  }
+}
+
+// ─── CLAIMS ─────────────────────────────────────────────────
+async function loadClaims() {
+  const statsEl = document.getElementById('claims-stats');
+  const listEl = document.getElementById('claims-list');
+  const countEl = document.getElementById('claims-count');
+  if(!statsEl) return;
+  statsEl.innerHTML = '<div class="spinner"></div>';
+  try {
+    const r = await fetch(`${API}/api/claims/list`, {credentials:'include'});
+    if(!r.ok) throw new Error('no data');
+    const data = await r.json();
+    const claims = data.claims || [];
+    
+    if(countEl) countEl.textContent = claims.filter(c => c.status === 'new').length;
+    
+    // Stats cards
+    statsEl.innerHTML = `
+      <div class="card"><div class="icon-row"><span class="card-icon">📋</span><span class="label">Всего</span></div><div class="value">${data.count||0}</div></div>
+      <div class="card"><div class="icon-row"><span class="card-icon">🆕</span><span class="label">Новые</span></div><div class="value orange">${data.new||0}</div></div>
+      <div class="card"><div class="icon-row"><span class="card-icon">🔄</span><span class="label">В работе</span></div><div class="value cyan">${data.in_progress||0}</div></div>
+      <div class="card"><div class="icon-row"><span class="card-icon">✅</span><span class="label">Готово</span></div><div class="value green">${data.done||0}</div></div>
+    `;
+    
+    // Claims list
+    const statusIcons = {done:'✅', in_progress:'🔄', new:'🆕', cancelled:'❌'};
+    const statusLabels = {done:'Готово', in_progress:'В работе', new:'Новая', cancelled:'Отменена'};
+    
+    listEl.innerHTML = claims.map(c => {
+      const icon = statusIcons[c.status] || '❓';
+      const deadline = c.deadline || '—';
+      const isOverdue = c.deadline && c.deadline < new Date().toISOString().slice(0,10) && c.status !== 'done';
+      
+      return `<div class="item ${isOverdue ? 'level-critical' : ''}">
+        <div class="item-title">${c.emoji||'📋'} ${c.id} — ${esc(c.client||'—')}</div>
+        <div class="item-sub">📍 ${esc(c.address||'—')}</div>
+        <div class="item-sub">📋 ${esc(c.description||'—')}</div>
+        <div class="item-badges">
+          <span class="badge ${c.status==='done'?'ok':c.status==='new'?'warn':'info'}">${icon} ${statusLabels[c.status]||c.status}</span>
+          <span class="badge ${isOverdue ? 'err' : 'dim'}">⏰ ${deadline}</span>
+        </div>
+      </div>`;
+    }).join('') || '<div class="empty-state"><span class="emoji">📋</span>Нет заявок</div>';
+    
+    document.getElementById('claims-refresh-time').textContent = new Date().toLocaleTimeString('ru-RU');
+  } catch {
+    statsEl.innerHTML = '<div class="empty-state">Ошибка загрузки</div>';
   }
 }
 
@@ -638,6 +696,37 @@ function updateRefreshTime() {
   if(el) el.textContent = new Date().toLocaleTimeString('ru-RU');
 }
 
+// ─── QUOTA CARD ─────────────────────────────────────────────
+async function updateQuotaCard() {
+  const valueEl = document.getElementById('quota-value');
+  const metaEl = document.getElementById('quota-meta');
+  const cardEl = document.getElementById('quota-card');
+  if(!valueEl) return;
+  try {
+    const r = await fetch(`${API}/api/quota/status`, {credentials:'include'});
+    if(!r.ok) throw new Error('no data');
+    const data = await r.json();
+    const or = Array.isArray(data) ? data.find(d => d.provider === 'openrouter') : null;
+    if(!or || or.error) throw new Error('no openrouter');
+    
+    const remaining = or.remaining || 0;
+    const pct = or.remaining_pct || 0;
+    const status = or.status || 'ok';
+    
+    valueEl.textContent = `$${remaining.toFixed(2)}`;
+    valueEl.className = 'value ' + (status === 'ok' ? 'green' : status === 'warning' ? 'orange' : 'red');
+    metaEl.textContent = `${pct.toFixed(0)}% осталось · ${or.usage_pct?.toFixed(0) || 0}% потрачено`;
+    
+    // Update card border color
+    if(cardEl) {
+      cardEl.style.borderColor = status === 'ok' ? 'var(--green)' : status === 'warning' ? 'var(--orange)' : 'var(--red)';
+    }
+  } catch {
+    valueEl.textContent = '—';
+    metaEl.textContent = 'нет данных';
+  }
+}
+
 // ─── OVERVIEW DETAIL ────────────────────────────────────────
 function showOverviewDetail(type, data) {
   const d = window._overviewData || {};
@@ -745,6 +834,24 @@ function showOverviewDetail(type, data) {
         `).join('')}</div>`;
     }
     
+  } else if(type === 'quota') {
+    html = `<h3>💳 Квота OpenRouter</h3>
+      <div class="cards" style="margin:12px 0">
+        <div class="card"><div class="label">Осталось</div><div class="value green">$2.81</div></div>
+        <div class="card"><div class="label">Потрачено</div><div class="value red">$12.87</div></div>
+        <div class="card"><div class="label">Баланс</div><div class="value">$15.69</div></div>
+      </div>
+      <div class="section-label">📊 Расход по времени</div>
+      <div style="background:var(--border);border-radius:99px;height:12px;margin:12px 0;overflow:hidden">
+        <div style="background:var(--orange);width:82%;height:100%;border-radius:99px"></div>
+      </div>
+      <div class="meta" style="text-align:center">82% потрачено · 18% осталось</div>
+      <div class="section-label" style="margin-top:16px">⚠️ Рекомендация</div>
+      <div class="item level-warning">
+        <div class="item-title">Пополнить баланс</div>
+        <div class="item-sub">При текущей нагрузке ${'$2.81'.replace('$','')} хватит на ~1-2 дня. Пополни сейчас чтобы не прерывать работу.</div>
+      </div>`;
+  
   } else if(type === 'alert') {
     html = `<h3>${esc(data.title)}</h3>
       <div class="item level-${data.level}" style="margin:12px 0"><div class="item-sub" style="font-size:14px">${esc(data.message)}</div></div>
