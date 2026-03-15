@@ -1,0 +1,5 @@
+{
+  "username": "admin",
+  "password_hash": "CHANGE_ME_USE_SCRIPT_BELOW",
+  "_instructions": "Generate hash with: python3 -c \"import hashlib; print(hashlib.sha256(b'yourpassword').hexdigest())\""
+}

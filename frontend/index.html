@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <title>Claw Monitor Dashboard</title>
+  <link rel="stylesheet" href="./styles.css"/>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginOverlay">
+  <div class="login-card">
+    <h2>Claw Monitor</h2>
+    <div class="sub">Центр управления</div>
+    <div class="field">
+      <label>Логин</label>
+      <input id="loginUser" value="admin" autocomplete="username"/>
+    </div>
+    <div class="field">
+      <label>Пароль</label>
+      <input id="loginPass" type="password" autocomplete="current-password"/>
+    </div>
+    <button id="loginBtn">Войти</button>
+    <div id="loginMsg"></div>
+  </div>
+</div>
+
+<div class="app">
+  <!-- DESKTOP NAV -->
+  <aside class="sidebar">
+    <div class="brand">Claw Monitor Dashboard</div>
+    <nav>
+      <a href="#" data-page="overview" class="active">📊 Обзор</a>
+      <a href="#" data-page="agents">🤖 Агенты</a>
+      <a href="#" data-page="llm">💰 LLM</a>
+      <a href="#" data-page="incidents">🚨 События</a>
+      <a href="#" data-page="growth">🌱 Growth</a>
+      <a href="#" data-page="topology">🔗 Топология</a>
+      <a href="#" data-page="system">⚙️ Система</a>
+      <a href="#" data-page="chat">💬 Чат</a>
+      <a href="#" data-page="logs">📋 Логи</a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <!-- OVERVIEW -->
+    <div class="page active" id="page-overview">
+      <div class="page-title">📊 Обзор</div>
+      <div class="refresh-bar">Обновлено: <span class="time" id="refresh-time">—</span></div>
+      <div class="section-label">Ключевые метрики</div>
+      <div id="overview-cards" class="cards"></div>
+      <div class="section-label">⚠️ Оповещения</div>
+      <div id="overview-alerts" class="list"></div>
+    </div>
+
+    <!-- AGENTS -->
+    <div class="page" id="page-agents">
+      <div class="page-title">🤖 Агенты</div>
+      <div id="agents-grid" class="list"></div>
+    </div>
+
+    <!-- LLM -->
+    <div class="page" id="page-llm">
+      <div class="page-title">💰 LLM Usage</div>
+      <div id="llm-summary"></div>
+      <div class="section-label">По провайдерам</div>
+      <div id="llm-providers" class="list"></div>
+      <div class="section-label">🔥 Горячие сессии</div>
+      <div id="llm-sessions" class="list"></div>
+    </div>
+
+    <!-- INCIDENTS -->
+    <div class="page" id="page-incidents">
+      <div class="page-title">🚨 Инциденты</div>
+      <div id="inc-summary"></div>
+      <div class="section-label">События</div>
+      <div id="inc-list" class="list"></div>
+    </div>
+
+    <!-- GROWTH -->
+    <div class="page" id="page-growth">
+      <div class="page-title">🌱 Growth</div>
+      <div id="growth-summary"></div>
+      <div class="section-label">Предложения</div>
+      <div id="growth-proposals" class="list"></div>
+    </div>
+
+    <!-- SYSTEM -->
+    <div class="page" id="page-system">
+      <div class="page-title">⚙️ Система</div>
+      <div id="system-info"></div>
+    </div>
+
+    <!-- TOPOLOGY -->
+    <div class="page" id="page-topology">
+      <div class="page-title">🔗 Топология</div>
+      <div id="topology-board"></div>
+    </div>
+
+    <!-- CHAT -->
+    <div class="page" id="page-chat">
+      <div class="page-title">💬 Управляющий чат</div>
+      <div class="chat-box">
+        <div class="chat-messages" id="chat-messages"></div>
+        <div class="chat-input-row">
+          <input id="chat-input" placeholder="Команда..."/>
+          <button id="chat-send">➤</button>
+        </div>
+        <div class="chat-hints">
+          <span class="chat-hint" data-text="статус системы">статус</span>
+          <span class="chat-hint" data-text="покажи очередь">очередь</span>
+          <span class="chat-hint" data-text="рост Люси">рост</span>
+          <span class="chat-hint" data-text="LLM расход">llm</span>
+          <span class="chat-hint" data-text="инциденты моделей">инциденты</span>
+          <span class="chat-hint" data-text="топология">топология</span>
+        </div>
+      </div>
+      <div style="margin-top:20px">
+        <div class="section-label">🔧 Действия</div>
+        <div class="actions-grid">
+          <button class="action-btn" data-action="refresh_runtime">🔄 Runtime</button>
+          <button class="action-btn" data-action="refresh_queue">📋 Очередь</button>
+          <button class="action-btn" data-action="prewarm_snapshot">⚡ Prewarm</button>
+          <button class="action-btn" data-action="subagents_healthcheck">🩺 Healthcheck</button>
+          <button class="action-btn" data-action="dashboard_backend_restart">🔁 Restart backend</button>
+          <button class="action-btn" data-action="dashboard_frontend_restart">🔁 Restart frontend</button>
+        </div>
+        <div id="action-result" style="margin-top:14px;padding:12px;background:var(--bg);border-radius:12px;font-size:13px;color:var(--text-dim);">Здесь будут результаты</div>
+      </div>
+    </div>
+
+    <!-- LOGS -->
+    <div class="page" id="page-logs">
+      <div class="page-title">📋 Логи</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+        <button class="log-select-btn active" data-log="gateway">Gateway</button>
+        <button class="log-select-btn" data-log="gateway-errors">Gateway Errors</button>
+        <button class="log-select-btn" data-log="backend">Backend</button>
+        <button class="log-select-btn" data-log="backend-error">Backend Errors</button>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:13px;color:var(--text-dim)">Источник: <strong id="logs-name" style="color:var(--accent)">gateway</strong></span>
+        <button id="logs-refresh">🔄 Обновить</button>
+      </div>
+      <pre id="logs-content"></pre>
+    </div>
+
+  </main>
+</div>
+
+<!-- BOTTOM NAV (mobile only) -->
+<nav class="bottom-nav">
+  <a class="nav-item active" data-page="overview"><span class="nav-icon">📊</span>Обзор</a>
+  <a class="nav-item" data-page="agents"><span class="nav-icon">🤖</span>Агенты</a>
+  <a class="nav-item" data-page="llm"><span class="nav-icon">💰</span>LLM</a>
+  <a class="nav-item" data-page="incidents"><span class="nav-icon">🚨</span>События</a>
+  <a class="nav-item" data-page="growth"><span class="nav-icon">🌱</span>Growth</a>
+  <a class="nav-item" data-page="topology"><span class="nav-icon">🔗</span>Топология</a>
+  <a class="nav-item" data-page="system"><span class="nav-icon">⚙️</span>Система</a>
+  <a class="nav-item" data-page="chat"><span class="nav-icon">💬</span>Чат</a>
+  <a class="nav-item" data-page="logs"><span class="nav-icon">📋</span>Логи</a>
+</nav>
+
+<script src="./app.js"></script>
+<script>
+(function() {
+  const mq = window.matchMedia('(min-width:768px)');
+  function update() {
+    const sidebar = document.querySelector('.sidebar');
+    const bnav = document.querySelector('.bottom-nav');
+    if (sidebar) sidebar.style.display = mq.matches ? '' : 'none';
+    if (bnav) bnav.style.display = mq.matches ? 'none' : '';
+  }
+  mq.addEventListener('change', update);
+  update();
+})();
+</script>
+</body>
+</html>

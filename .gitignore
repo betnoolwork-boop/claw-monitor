@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Node
+node_modules/
+
+# Data (runtime)
+data/
+logs/
+*.log
+
+# Secrets
+config/auth.json
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
