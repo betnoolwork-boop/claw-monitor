@@ -1,5 +1,5 @@
 // Claw Monitor v3 — Redesigned
-const API = '';
+const API = 'http://localhost:8001';
 let refreshTimer = null;
 let currentPage = 'overview';
 
